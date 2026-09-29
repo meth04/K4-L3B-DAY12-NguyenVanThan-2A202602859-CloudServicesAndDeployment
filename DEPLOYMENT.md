@@ -10,17 +10,17 @@
 
 | Mục | Nội dung |
 |-----|----------|
-| Họ và tên | (điền họ tên) |
-| Mã học viên | (điền mã học viên) |
-| Repo | (điền link repo K4-L3B-DAY12-HoVaTen-MSSV-CloudServicesAndDeployment) |
+| Họ và tên | Nguyễn Văn Thân |
+| Mã học viên | 2A202602859 |
+| Repo | https://github.com/meth04/K4-L3B-DAY12-NguyenVanThan-2A202602859-CloudServicesAndDeployment |
 
 ## Service
 
 | Mục | Nội dung |
 |-----|----------|
-| Public URL | https://TODO-thay-bang-url-that.up.railway.app |
-| Platform | Railway / Render / Cloud Run — (điền platform bạn dùng) |
-| Ngày deploy | (điền ngày) |
+| Public URL | https://day12-agent-hbvb.onrender.com |
+| Platform | Render |
+| Ngày deploy | 2026-09-29 |
 
 ## Biến Môi Trường Đã Set Trên Cloud
 
@@ -28,9 +28,9 @@ Ghi tên biến và **nguồn giá trị**, không ghi giá trị:
 
 | Biến | Đã set | Ghi chú |
 |------|--------|---------|
-| `PORT` | ✅ | platform tự gán |
+| `PORT` | ✅ | platform tự gán (Render inject) |
 | `AGENT_API_KEY` | ✅ | đặt trong dashboard, không nằm trong repo |
-| `REDIS_URL` | ✅ | (điền: Redis add-on của platform / Upstash / ...) |
+| `REDIS_URL` | ✅ | Redis add-on của Render (`day12-redis`, plan free), nối qua internal connection string |
 | `RATE_LIMIT_PER_MINUTE` | ✅ | 10 |
 | `MONTHLY_BUDGET_USD` | ✅ | 10.0 |
 | `LOG_LEVEL` | ✅ | INFO |
@@ -73,29 +73,72 @@ done; echo
 Dán output của các lệnh trên vào đây:
 
 ```
-(điền output)
+$ curl -i https://day12-agent-hbvb.onrender.com/health
+HTTP/2 200
+content-type: application/json
+server: cloudflare
+date: Tue, 29 Sep 2026 03:52:12 GMT
+
+{"status":"ok","service":"day12-agent","version":"1.0.0"}
+
+$ curl -i https://day12-agent-hbvb.onrender.com/ready
+HTTP/2 200
+content-type: application/json
+server: cloudflare
+date: Tue, 29 Sep 2026 03:52:12 GMT
+
+{"status":"ready","redis":true}
+
+$ curl -i -X POST https://day12-agent-hbvb.onrender.com/ask \
+    -H "Content-Type: application/json" -d '{"question":"Hello"}'
+HTTP/2 401
+content-type: application/json
+date: Tue, 29 Sep 2026 03:52:12 GMT
+
+{"detail":"invalid or missing API key"}
+
+$ curl -i -X POST https://day12-agent-hbvb.onrender.com/ask \
+    -H "Content-Type: application/json" \
+    -H "X-API-Key: $AGENT_API_KEY" -H "X-User-Id: sv-test" \
+    -d '{"question":"Deploy là gì?"}'
+HTTP/2 200
+content-type: application/json
+
+{
+  "answer": "Ngắn gọn: Deploy la gi phụ thuộc vào ba yếu tố — cấu hình qua biến môi trường, health check để orchestrator biết trạng thái, và giới hạn tài nguyên.",
+  "user_id": "sv-test",
+  "history_length": 0,
+  "cost_usd": 2.265e-05,
+  "tokens": {"in": 3, "out": 37}
+}
+
+$ for i in $(seq 1 15); do curl -s -o /dev/null -w "%{http_code} " -X POST .../ask \
+    -H "X-API-Key: $AGENT_API_KEY" -H "X-User-Id: sv-test" \
+    -d '{"question":"test"}'; done; echo
+200 200 200 200 200 200 200 200 200 429 429 429 429 429 429
 ```
+
+Nhận xét: 9 request đầu trả `200`, 6 request sau trả `429`. Con số 9 (không
+phải 10) là vì lệnh 4 ngay trước đó cũng dùng `X-User-Id: sv-test` và đã tiêu
+1 lượt — sliding window 60 giây đếm chung, đúng như thiết kế.
 
 ## Ảnh Chụp Màn Hình
 
 Đặt ảnh trong thư mục `screenshots/`:
 
-- `screenshots/dashboard.png` — trang quản lý service trên platform
-- `screenshots/health.png` — kết quả gọi `/health` từ trình duyệt hoặc curl
+- `screenshots/dashboard.png` — trang quản lý service trên platform (Render)
+- `screenshots/health.png` — kết quả gọi `/health` từ trình duyệt (liveness)
+- `screenshots/ready.png` — kết quả gọi `/ready`, trả `{"status":"ready","redis":true}`
+  — bằng chứng service trên cloud đã nối được Redis add-on
 
 ---
 
-## Nếu Dùng Phương Án Dự Phòng
+## Ghi Chú Thêm
 
-Không đăng ký được tài khoản cloud? Vẫn nộp được bài, nhưng CP5 tối đa 60% điểm:
-
-1. Đặt `LOCAL_FALLBACK=true` trong `.env`
-2. Chạy `docker compose up -d` rồi kiểm tra `docker compose ps`
-3. Chụp màn hình vào `screenshots/`
-4. Chạy `pytest tests/test_cp5.py -v` — bộ test sẽ tự chuyển sang kiểm tra
-   `http://localhost:8000`
-5. Ghi rõ lý do không deploy được vào phần dưới đây:
-
-```
-(điền lý do nếu dùng phương án dự phòng, ngược lại xóa mục này)
-```
+- Service tạo bằng Render API v1 (`POST /services` + `POST /redis`), region
+  `oregon`, plan `free`. Build từ `Dockerfile` ở nhánh `main`.
+- `AGENT_API_KEY` do Render giữ, chỉ tồn tại trong dashboard và trong `.env`
+  cục bộ — **không** có trong repo.
+- Render inject biến `PORT`; `CMD` trong Dockerfile đọc `${PORT:-8000}` nên
+  container listen đúng cổng platform gán.
+- Health check của Render trỏ vào `/health` (liveness, không phụ thuộc Redis).
