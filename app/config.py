@@ -40,9 +40,25 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # TODO (CP1): khai báo 6 trường theo bảng trên, ví dụ:
-    #     port: int = 8000
-    #     agent_api_key: str
+    # Cổng HTTP. Trên cloud, platform tự set biến PORT.
+    port: int = 8000
+
+    # BẮT BUỘC: không có giá trị mặc định → thiếu biến là chết ngay lúc khởi
+    # động (fail fast). Một mặc định như "changeme" sẽ khiến app vẫn chạy và
+    # bạn chỉ biết mình quên set secret khi người khác đã dùng khóa đó.
+    agent_api_key: str
+
+    # Nơi lưu state (lịch sử hội thoại, rate limit, chi phí).
+    redis_url: str = "redis://localhost:6379/0"
+
+    # Giới hạn số request mỗi phút cho mỗi user.
+    rate_limit_per_minute: int = 10
+
+    # Ngân sách tối đa mỗi user mỗi tháng (USD).
+    monthly_budget_usd: float = 10.0
+
+    # DEBUG | INFO | WARNING | ERROR
+    log_level: str = "INFO"
 
 
 @lru_cache(maxsize=1)
